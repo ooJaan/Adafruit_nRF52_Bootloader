@@ -58,7 +58,7 @@
 #define USB_DESC_CDC_ONLY_PID  0x7A01
 
 #define UF2_PRODUCT_NAME  "fistboard nRF52840"
-#define UF2_VOLUME_LABEL  "FISTBOARD-BOOT"
+#define UF2_VOLUME_LABEL  "FIST-BOOT"
 #define UF2_BOARD_ID      "nRF52840-fistboard-rev1"
 #define UF2_INDEX_URL     "https://github.com/flexfreak"
 
