@@ -22,37 +22,37 @@
  * THE SOFTWARE.
  */
 
-#include "nrfx.h"
-#include "nrfx_power.h"
 #include "nrf_sdm.h"
 #include "nrf_soc.h"
+#include "nrfx.h"
+#include "nrfx_power.h"
 
 #include "nrf_usbd.h"
 #include "tusb.h"
 #include "usb_desc.h"
 
-#include "uf2/uf2.h"
 #include "boards.h"
+#include "uf2/uf2.h"
+
+// External declaration for DFU trigger flag
+extern volatile bool dfu_triggered;
 
 //--------------------------------------------------------------------+
 // MACRO TYPEDEF CONSTANT ENUM DECLARATION
 //--------------------------------------------------------------------+
 
 /* tinyusb function that handles power event (detected, ready, removed)
- * We must call it within SD's SOC event handler, or set it as power event handler if SD is not enabled. */
+ * We must call it within SD's SOC event handler, or set it as power event
+ * handler if SD is not enabled. */
 extern void tusb_hal_nrf_power_event(uint32_t event);
 
 //--------------------------------------------------------------------+
 // Forward USB interrupt events to TinyUSB IRQ Handler
 //--------------------------------------------------------------------+
-void USBD_IRQHandler(void)
-{
-  tud_int_handler(0);
-}
+void USBD_IRQHandler(void) { tud_int_handler(0); }
 
 //------------- IMPLEMENTATION -------------//
-void usb_init(bool cdc_only)
-{
+void usb_init(bool cdc_only) {
   // 0, 1 is reserved for SD
   NVIC_SetPriority(USBD_IRQn, 2);
 
@@ -62,26 +62,24 @@ void usb_init(bool cdc_only)
 
   uint8_t sd_en = false;
 
-  if ( is_sd_existed() )
-  {
+  if (is_sd_existed()) {
     sd_softdevice_is_enabled(&sd_en);
   }
 
-  if ( sd_en )
-  {
+  if (sd_en) {
     sd_power_usbdetected_enable(true);
     sd_power_usbpwrrdy_enable(true);
     sd_power_usbremoved_enable(true);
 
     sd_power_usbregstatus_get(&usb_reg);
-  }else
-  {
+  } else {
     // Power module init
-    const nrfx_power_config_t pwr_cfg = { 0 };
+    const nrfx_power_config_t pwr_cfg = {0};
     nrfx_power_init(&pwr_cfg);
 
     // Register tusb function as USB power handler
-    const nrfx_power_usbevt_config_t config = { .handler = (nrfx_power_usb_event_handler_t) tusb_hal_nrf_power_event };
+    const nrfx_power_usbevt_config_t config = {
+        .handler = (nrfx_power_usb_event_handler_t)tusb_hal_nrf_power_event};
     nrfx_power_usbevt_init(&config);
 
     nrfx_power_usbevt_enable();
@@ -89,11 +87,11 @@ void usb_init(bool cdc_only)
     usb_reg = NRF_POWER->USBREGSTATUS;
   }
 
-  if ( usb_reg & POWER_USBREGSTATUS_VBUSDETECT_Msk ) {
+  if (usb_reg & POWER_USBREGSTATUS_VBUSDETECT_Msk) {
     tusb_hal_nrf_power_event(NRFX_POWER_USB_EVT_DETECTED);
   }
 
-  if ( usb_reg & POWER_USBREGSTATUS_OUTPUTRDY_Msk ) {
+  if (usb_reg & POWER_USBREGSTATUS_OUTPUTRDY_Msk) {
     tusb_hal_nrf_power_event(NRFX_POWER_USB_EVT_READY);
   }
 
@@ -105,21 +103,28 @@ void usb_init(bool cdc_only)
   tusb_init();
 }
 
-void usb_teardown(void)
-{
-  // Simulate an disconnect which cause pullup disable, USB perpheral disable and hclk disable
+void usb_teardown(void) {
+  // Simulate an disconnect which cause pullup disable, USB perpheral disable
+  // and hclk disable
   tusb_hal_nrf_power_event(NRFX_POWER_USB_EVT_REMOVED);
 }
 
 //--------------------------------------------------------------------+
 // tinyusb callbacks
 //--------------------------------------------------------------------+
-void tud_mount_cb(void)
-{
-  led_state(STATE_USB_MOUNTED);
-}
+void tud_mount_cb(void) { led_state(STATE_USB_MOUNTED); }
 
-void tud_umount_cb(void)
-{
-  led_state(STATE_USB_UNMOUNTED);
+void tud_umount_cb(void) { led_state(STATE_USB_UNMOUNTED); }
+
+// Vendor control request handler
+bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
+                                tusb_control_request_t const *request) {
+  // Only handle the special DFU trigger request
+  if (request->bmRequestType_bit.type == TUSB_REQ_TYPE_VENDOR &&
+      request->bRequest == 0xA0 && stage == CONTROL_STAGE_SETUP) {
+    dfu_triggered = true;
+    return tud_control_status(rhport, request);
+  }
+
+  return false; // Not handled
 }
