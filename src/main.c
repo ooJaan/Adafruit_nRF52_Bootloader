@@ -184,7 +184,6 @@ int main(void) {
   usb_init(false); // false for UF2 mode (both CDC and MSC)
 
   // Wait 2 seconds and process USB tasks to catch special vendor request
-  uint32_t start_time = 0;
   for (int i = 0; i < 200; i++) { // roughly 2 seconds with 10ms delays
     NRFX_DELAY_MS(10);
     tud_task(); // Process USB tasks
